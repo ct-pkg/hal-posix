@@ -1,0 +1,91 @@
+/*
+ * PosixHal.h.ct - the POSIX implementation of the hal contract.
+ *
+ * One unit carries the platform functions, one public instance and the four
+ * maps that bind the hal traits to those functions. Everything is POSIX
+ * (`write` / `read` / `clock_gettime`), so the same source serves macOS and
+ * Linux on x86_64 and aarch64 with no #ifdef.
+ *
+ * Uart: send writes fd 1 (stdout), recv reads fd 0 (stdin) - the console
+ * stands in for the serial line. Gpio: a 32-pin in-memory stub (one bit per
+ * pin), not real hardware. Clock: CLOCK_MONOTONIC in milliseconds. Log: fd 2
+ * (stderr).
+ *
+ * License: MIT (see LICENSE).
+ */
+#include <unistd.h>
+#include <time.h>
+
+import Uart;
+import Gpio;
+import Clock;
+import Log;
+
+pub struct PosixHal {
+    int unused;
+}
+
+/* The one instance consumers box: `Uart u = posix_hal;` binds any of the four
+   traits, because each map below names this same object. */
+pub struct PosixHal posix_hal;
+
+/* One bit per pin; the stub covers pins 0..31. */
+int hal_posix_gpio_state = 0;
+
+int hal_posix_uart_send(char *buf, int len)
+{
+    if (len < 0) return -1;
+    return (int)write(1, buf, (size_t)len);
+}
+
+int hal_posix_uart_recv(char *buf, int len)
+{
+    if (len < 0) return -1;
+    return (int)read(0, buf, (size_t)len);
+}
+
+int hal_posix_gpio_read(int pin)
+{
+    if (pin < 0 || pin >= 32) return -1;
+    return (hal_posix_gpio_state >> pin) & 1;
+}
+
+int hal_posix_gpio_write(int pin, int value)
+{
+    if (pin < 0 || pin >= 32) return -1;
+    if (value) hal_posix_gpio_state = hal_posix_gpio_state | (1 << pin);
+    else hal_posix_gpio_state = hal_posix_gpio_state & ~(1 << pin);
+    return 0;
+}
+
+int hal_posix_now_ms(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+
+int hal_posix_log_write(char *buf, int len)
+{
+    if (len < 0) return -1;
+    return (int)write(2, buf, (size_t)len);
+}
+
+map trait Uart for instance posix_hal {
+    send(buf, len) -> hal_posix_uart_send(buf, len);
+    recv(buf, len) -> hal_posix_uart_recv(buf, len);
+}
+
+map trait Gpio for instance posix_hal {
+    read(pin) -> hal_posix_gpio_read(pin);
+    write(pin, value) -> hal_posix_gpio_write(pin, value);
+}
+
+map trait Clock for instance posix_hal {
+    now_ms() -> hal_posix_now_ms();
+}
+
+map trait Log for instance posix_hal {
+    write(buf, len) -> hal_posix_log_write(buf, len);
+}

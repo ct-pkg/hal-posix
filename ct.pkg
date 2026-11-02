@@ -1,0 +1,8 @@
+# hal-posix - the POSIX platform half of the hal contract (Wave 1).
+#
+# One source tree for macOS and Linux (x86_64 / aarch64): the implementation
+# only uses POSIX calls, so there is no #ifdef and no per-platform copy.
+name = hal-posix
+version = 1.0.0
+dep = hal@^1.0.0
+licence = MIT
