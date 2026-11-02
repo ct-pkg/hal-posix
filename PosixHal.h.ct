@@ -8,8 +8,8 @@
  *
  * Uart: send writes fd 1 (stdout), recv reads fd 0 (stdin) - the console
  * stands in for the serial line. Gpio: a 32-pin in-memory stub (one bit per
- * pin), not real hardware. Clock: CLOCK_MONOTONIC in milliseconds. Log: fd 2
- * (stderr).
+ * pin), not real hardware. Clock: CLOCK_MONOTONIC in milliseconds, anchored at
+ * the first call. Log: fd 2 (stderr).
  *
  * License: MIT (see LICENSE).
  */
@@ -58,12 +58,22 @@ int hal_posix_gpio_write(int pin, int value)
     return 0;
 }
 
+/* `now_ms` is anchored at the first call. The contract only promises differences
+   (`Clock.h.ct`: "the origin is unspecified; only differences are meaningful"),
+   so returning the time since process start keeps the value inside `int` for
+   24.8 days of *runtime*, instead of wrapping when the *machine* has been up
+   that long. */
+static long hal_posix_t0_ms = -1;
+
 int hal_posix_now_ms(void)
 {
     struct timespec ts;
+    long ms;
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (int)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+    ms = (long)ts.tv_sec * 1000 + (long)(ts.tv_nsec / 1000000);
+    if (hal_posix_t0_ms < 0) hal_posix_t0_ms = ms;
+    return (int)(ms - hal_posix_t0_ms);
 }
 
 int hal_posix_log_write(char *buf, int len)

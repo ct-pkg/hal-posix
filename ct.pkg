@@ -7,7 +7,7 @@
 # (`read`, `write`, `clock_gettime`) unless the feature level is asked for, so
 # the package carries it in `cflags` instead of a source `#define`.
 name = hal-posix
-version = 1.0.0
+version = 1.0.1
 dep = hal@^1.0.0
 licence = MIT
 cflags = -D_POSIX_C_SOURCE=200809L
