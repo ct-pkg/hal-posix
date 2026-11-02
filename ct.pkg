@@ -2,7 +2,12 @@
 #
 # One source tree for macOS and Linux (x86_64 / aarch64): the implementation
 # only uses POSIX calls, so there is no #ifdef and no per-platform copy.
+#
+# `-std=c99` (what `ct build` passes) hides the POSIX declarations in glibc
+# (`read`, `write`, `clock_gettime`) unless the feature level is asked for, so
+# the package carries it in `cflags` instead of a source `#define`.
 name = hal-posix
 version = 1.0.0
 dep = hal@^1.0.0
 licence = MIT
+cflags = -D_POSIX_C_SOURCE=200809L
