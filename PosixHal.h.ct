@@ -1,32 +1,38 @@
 /*
  * PosixHal.h.ct - the POSIX implementation of the hal contract.
  *
- * One unit carries the platform functions, one public instance and the four
- * maps that bind the hal traits to those functions. Everything is POSIX
- * (`write` / `read` / `clock_gettime`), so the same source serves macOS and
- * Linux on x86_64 and aarch64 with no #ifdef.
+ * One unit carries the platform functions, one public instance and the three
+ * instance maps that bind Uart / Gpio / Log to those functions. Everything is
+ * POSIX (`write` / `read` / `clock_gettime`), so the same source serves macOS
+ * and Linux on x86_64 and aarch64 with no #ifdef.
  *
  * Uart: send writes fd 1 (stdout), recv reads fd 0 (stdin) - the console
  * stands in for the serial line. Gpio: a 32-pin in-memory stub (one bit per
- * pin), not real hardware. Clock: CLOCK_MONOTONIC in milliseconds, anchored at
- * the first call. Log: fd 2 (stderr).
+ * pin), not real hardware. Log: fd 2 (stderr).
+ *
+ * Clock is not an instance map: `hal::Clock.nowMs()` is a namespace mapping in
+ * hal's Clock.m.ct onto the `hal_platform_now_ms` symbol defined here
+ * (CLOCK_MONOTONIC in milliseconds, anchored at the first call).
  *
  * License: MIT (see LICENSE).
  */
 #include <unistd.h>
 #include <time.h>
 
-import Uart;
-import Gpio;
-import Clock;
-import Log;
+import hal::Uart;
+import hal::Gpio;
+import hal::Log;
+
+/* The `char *` GPIO entry (`"gpio17".read()`); imported so consumers that
+   import PosixHal get both the instance and the device-name spellings. */
+import GpioName;
 
 pub struct PosixHal {
     int unused;
 }
 
-/* The one instance consumers box: `Uart u = posix_hal;` binds any of the four
-   traits, because each map below names this same object. */
+/* The one instance consumers box: `Uart u = posix_hal;` binds any of the three
+   trait maps below, because each map names this same object. */
 pub struct PosixHal posix_hal;
 
 /* One bit per pin; the stub covers pins 0..31. */
@@ -58,14 +64,16 @@ int hal_posix_gpio_write(int pin, int value)
     return 0;
 }
 
-/* `now_ms` is anchored at the first call. The contract only promises differences
-   (`Clock.h.ct`: "the origin is unspecified; only differences are meaningful"),
+/* The symbol behind `hal::Clock.nowMs()`: hal's Clock.m.ct maps its namespace
+   method here and ships no body, so this definition is what a program links.
+   `nowMs` is anchored at the first call. The contract only promises differences
+   (Clock.m.ct: "the origin is unspecified; only differences are meaningful"),
    so returning the time since process start keeps the value inside `int` for
    24.8 days of *runtime*, instead of wrapping when the *machine* has been up
    that long. */
 static long hal_posix_t0_ms = -1;
 
-int hal_posix_now_ms(void)
+int hal_platform_now_ms(void)
 {
     struct timespec ts;
     long ms;
@@ -90,10 +98,6 @@ map trait Uart for instance posix_hal {
 map trait Gpio for instance posix_hal {
     read(pin) -> hal_posix_gpio_read(pin);
     write(pin, value) -> hal_posix_gpio_write(pin, value);
-}
-
-map trait Clock for instance posix_hal {
-    now_ms() -> hal_posix_now_ms();
 }
 
 map trait Log for instance posix_hal {

@@ -1,0 +1,22 @@
+#include <stdio.h>
+import hal::Gpio;
+import PosixHal;
+
+int main(void)
+{
+    Gpio g = posix_hal;
+
+    printf("initial=%d\n", g.read(17));
+    printf("write_ret=%d\n", g.write(17, 1));
+    printf("after_set=%d\n", g.read(17));
+    printf("other_pin=%d\n", g.read(16));
+    printf("write_ret_zero=%d\n", g.write(17, 0));
+    printf("after_clear=%d\n", g.read(17));
+    printf("neg_read=%d\n", g.read(-1));
+    printf("neg_write=%d\n", g.write(-1, 1));
+    printf("hi_read=%d\n", g.read(32));
+    printf("hi_write=%d\n", g.write(32, 1));
+    printf("pin31_write=%d\n", g.write(31, 1));
+    printf("pin31_read=%d\n", g.read(31));
+    return 0;
+}

@@ -1,0 +1,34 @@
+/*
+ * GpioName.m.ct - the `char *` host for hal-posix's GPIO stub.
+ *
+ * The receiver is a device name: `dev.read()` / `dev.write(value)`, where
+ * `dev` is `"gpio<N>"` for pin N (0..31). Anything else returns -1 and sets
+ * `errno = EINVAL`. The parsing and the forwarding to the existing
+ * `hal_posix_gpio_read` / `hal_posix_gpio_write` live in GpioName.shim.h.
+ *
+ * Two compiler facts shape this unit:
+ *
+ *   - `map trait ... for type` is only legal in a `.m.ct` unit, and a `.m.ct`
+ *     may import only another `.m.ct` (Module.h.ct:429). hal's `Gpio` is a
+ *     `.h.ct`, so this unit declares its own trait instead of importing it.
+ *     PosixHal.h.ct imports this unit, so `import PosixHal;` also brings the
+ *     `char *` methods.
+ *   - No namespace here. Adding one to a hal-posix unit makes the existing
+ *     `for instance` maps fail with `incomplete type 'struct hal_Uart_vtbl'`
+ *     (measured on ct v0.19.1), so the unit stays at the top level.
+ *
+ * v0.19.1 cannot use a string literal as a method receiver. Documents use
+ * `char *dev = "gpio17"; dev.read();`; the literal spelling needs ct 0.20.0.
+ *
+ * License: MIT (see LICENSE).
+ */
+
+pub trait GpioName {
+    int read();
+    int write(int value);
+}
+
+map trait GpioName for type char * {
+    read(dev)         -> hal_posix_gpio_name_read(dev);
+    write(dev, value) -> hal_posix_gpio_name_write(dev, value);
+}

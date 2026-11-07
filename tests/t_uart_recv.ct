@@ -1,0 +1,22 @@
+#include <stdio.h>
+import hal::Uart;
+import PosixHal;
+
+int main(void)
+{
+    Uart u = posix_hal;
+    char buf[8];
+    int n;
+
+    printf("zero=%d\n", u.recv(buf, 0));
+    printf("neg=%d\n", u.recv(buf, -1));
+
+    n = u.recv(buf, 2);
+    printf("first=%d [%c%c]\n", n, buf[0], buf[1]);
+
+    n = u.recv(buf, 2);
+    printf("second=%d [%c]\n", n, buf[0]);
+
+    printf("eof=%d\n", u.recv(buf, 2));
+    return 0;
+}

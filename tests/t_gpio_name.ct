@@ -1,0 +1,29 @@
+#include <stdio.h>
+import hal::Gpio;
+import PosixHal;
+
+int main(void)
+{
+    Gpio g = posix_hal;
+    char *dev = "gpio17";
+    char *dev18 = "gpio18";
+
+    printf("init=%d\n", g.read(17));
+    printf("write=%d\n", dev.write(1));
+    printf("read=%d\n", dev.read());
+    printf("via_instance=%d\n", g.read(17));
+
+    dev18.write(1);
+    printf("literal=%d\n", "gpio18".read());
+    printf("literal_clear=%d\n", "gpio18".write(0));
+    printf("literal_after_clear=%d\n", "gpio18".read());
+
+    printf("empty=%d\n", "".read());
+    printf("bare=%d\n", "gpio".read());
+    printf("nonnum=%d\n", "gpioX".read());
+    printf("upper=%d\n", "GPIO17".read());
+    printf("high=%d\n", "gpio32".read());
+    printf("negative=%d\n", "gpio-1".read());
+    printf("empty_write=%d\n", "".write(1));
+    return 0;
+}

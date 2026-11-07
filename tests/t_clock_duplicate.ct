@@ -1,0 +1,16 @@
+/* Negative link case: this unit and PosixHal.h.ct both define
+   `hal_platform_now_ms`. The build must fail with a duplicate-symbol error,
+   which proves PosixHal is the only definition in the normal case. */
+import hal::Clock;
+import PosixHal;
+
+int hal_platform_now_ms(void)
+{
+    return 7;
+}
+
+int main(void)
+{
+    int v = hal::Clock.nowMs();
+    return v == 7;
+}
