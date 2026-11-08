@@ -546,7 +546,37 @@ ctc: git fetch of 'https://github.com/ct-pkg/hal-posix' failed
 
 改法：给 stdin 送入数据或关闭它，例如 `printf 'x\n' | ./build`，或把 fd 0 设为非阻塞。
 
-## 8. 限制与未支持
+## 8. 术语表（Glossary）
+
+本表只解释三类词：本包特有概念、全仓易混概念（借用 / 所有权、句柄、宿主、映射）、以及正文出现过却没有展开的缩写和英文术语。通用编程词汇不在此列。
+
+| 术语 | 含义 | 本包中的所指 |
+| --- | --- | --- |
+| `HAL` | Hardware Abstraction Layer，硬件抽象层：用统一接口屏蔽板卡与 OS 差异。 | 本包是 `hal` 契约在 POSIX 上的实现，全部实现集中在 `PosixHal.h.ct`。 |
+| `UART` | Universal Asynchronous Receiver/Transmitter，通用异步收发器：面向字节的串行端口。 | `Uart` 实例映射把 `send` / `recv` 接到 `hal_posix_uart_send` / `hal_posix_uart_recv`，对应 fd 1 / fd 0。 |
+| `GPIO` | General-Purpose Input/Output，通用输入输出：可按位读写电平的引脚。 | `Gpio` 实例映射与 `GpioName` 都读写 `hal_posix_gpio_state` 这一个 32 位位图。 |
+| `backend`（后端） | 某个契约的具体实现。 | `hal-posix` 就是 `hal` 的 POSIX 后端；`PosixHal.h.ct` 是唯一实现单元。 |
+| `PosixHal` | 后端标签类型，本身不持有资源。 | `PosixHal.h.ct` 的 `pub struct PosixHal`，字段 `int unused` 只是占位。 |
+| `posix_hal` | 后端对外暴露的唯一实例。 | `PosixHal.h.ct` 的 `pub struct PosixHal posix_hal;`；`Uart u = posix_hal;`、`Gpio g = posix_hal;`、`Log l = posix_hal;` 都借用它。 |
+| `map trait Uart for instance posix_hal` | 把 trait 方法直接绑定到某个实例与 C 函数上的映射写法，不需要写 `impl`。 | `PosixHal.h.ct` 中的这个块把 `Uart` 绑到 `posix_hal`，其后还有对应的 `Gpio` 与 `Log` 块。 |
+| `namespace host`（命名空间宿主） | 方法没有接收者、只能以 `namespace::Type.method()` 限定名调用的宿主。 | `hal::Clock.nowMs()` 经 `hal` 的 `Clock.m.ct` 映射到本包的 `hal_platform_now_ms`。 |
+| `char *` 宿主 | 以字符串为接收者的类型宿主。 | `GpioName.m.ct` 的 `map trait GpioName for type char *`；接收者是 `"gpio<N>"` 设备名。 |
+| `GpioName` | `char *` 上的 GPIO 设备名入口。 | `GpioName.m.ct` 的 `pub trait GpioName`（`read()` / `write(int value)`），解析与转发在 `GpioName.shim.h`。 |
+| `shim` | 与 `.m.ct` 同基名、由编译器在 `import` 时注入消费者的 C 头文件，通常放 `static inline` 适配代码。 | `GpioName.shim.h`；`PosixHal.h.ct` 通过 `import GpioName;` 把它带给消费者。 |
+| `import` | 引入一个单元的接口；对映射单元还会注入同名 shim，并把被导入单元纳入构建。 | `import PosixHal;` 同时带来实例、`char *` GPIO 入口与 shim 声明。 |
+| `map`（映射） | CT 侧方法名到 C 符号或辅助函数的翻译层。 | CT 侧方法 `send` / `recv` / `read` / `write` 在 C 侧叫 `hal_posix_uart_send` / `hal_posix_uart_recv` / `hal_posix_gpio_read` / `hal_posix_gpio_write`；C 符号保留包前缀，短名由 `map` 块绑定。 |
+| `hal_platform_now_ms` | `hal::Clock.nowMs()` 背后的全局 C 符号。 | `PosixHal.h.ct` 定义的 `int hal_platform_now_ms(void)`；同一二进制只能有一份定义。 |
+| `errno` | C 的线程局部错误码，函数失败后读取。 | 只有 `GpioName` 的 `char *` 入口在名字非法时置 `errno = EINVAL` 并返回 `-1`；实例入口与 `Uart` / `Log` 只承诺 `-1`。 |
+| `EINVAL` | Invalid argument，参数非法的错误码。 | `GpioName` 对 `gpio32`、`gpio`、`GPIO17`、`gpio-1`、空串返回 `-1` 并置 `errno = EINVAL`。 |
+| `fd` | file descriptor，进程内的文件描述符整数。 | `Uart` 用 fd 1 写、fd 0 读，`Log` 用 fd 2 写。 |
+| `CLOCK_MONOTONIC` | 不受墙钟调整影响、只增不减的时钟。 | `hal_platform_now_ms` 用它取毫秒，并以第一次调用为原点。 |
+| `borrow` | 借用：只在使用期间访问对象或缓冲区，不取得所有权，也不负责释放。 | `Uart u = posix_hal;` 等接口值借用静态实例；`send` / `recv` / `write` 的 `char *buf` 只在调用期间借用。 |
+| `Drop` | 析构钩子：对象销毁时运行的清理代码。 | 本包不提供；`PosixHal` 没有析构，跨单元 `impl Drop` 不会派发（见「限制与未支持」第 7 条）。 |
+| `MVS` | Minimal Version Selection，依赖解析取满足范围的最低版本。 | `ct.pkg` 的 `dep = hal@^0.1.0` 由 `ct get` 按 MVS 解析。 |
+| `vendor/` | `ct get` 复制依赖包的固定副本目录。 | 发版后 `ct get hal-posix` 生成 `vendor/hal` 与 `vendor/hal-posix` 两个目录。 |
+| `ct.lock` | 记录依赖 commit 与摘要的锁文件。 | `ct get` 写入，`ct install` / `ct verify` 离线对账。 |
+
+## 9. 限制与未支持
 
 1. **`Gpio` 是内存，不是硬件。** `hal_posix_gpio_state` 是一个全进程共享的普通 `int`。只有引脚 `0..31` 存在，其他引脚号在 `read` 和 `write` 上都返回 `-1`。没有方向寄存器、上拉、边沿检测、中断或复用。两个 trait 对象看到的是同一批位，并发访问没有同步。
 2. **`Uart` 没有缓冲。** 每次 `send` / `recv` 恰好是一次 `write` / `read` 系统调用。`recv` 阻塞到至少一个字节或 EOF，短读正常。没有波特率、帧格式、超时、flush 或队列。
@@ -559,7 +589,7 @@ ctc: git fetch of 'https://github.com/ct-pkg/hal-posix' failed
 9. **线程安全不在承诺内。** GPIO 位图和时钟基准都是普通全局变量；需要并发安全时自己加锁或在外层串行化。
 10. **接口值借用对象。** `Uart u = posix_hal;` 里的 `u` 不拥有实例；`posix_hal` 是静态的，没有生命周期问题，换成自有对象时要注意对象先于接口值存活。
 
-## 9. 版本与变更记录
+## 10. 版本与变更记录
 
 - 当前版本：`0.1.0`，**尚未打 tag、未发布到索引**（`index/packages.txt` 中仍是注释行）；发版后索引才会出现 `name version git-url tag sha256:...` 格式的一行。
 - 依赖：`dep = hal@^0.1.0`；没有 `requires`；构建与运行输出在 `ct v0.19.1` 上验证。
